@@ -31,10 +31,13 @@ export default function Login() {
     } catch (err) {
       if (!err.response) {
         toast.error(
-          'Cannot reach API server. Start the backend (npm run dev) or set VITE_API_URL on Vercel.'
+          'Cannot reach API. Set VITE_API_URL on Vercel to https://YOUR-RENDER-URL.onrender.com/api'
         );
       } else {
-        toast.error(err.response?.data?.message || 'Login failed');
+        const msg =
+          err.response?.data?.message ||
+          `Request failed (${err.response.status}). Check API URL and Render logs.`;
+        toast.error(msg);
       }
     } finally {
       setLoading(false);

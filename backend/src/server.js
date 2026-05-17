@@ -45,10 +45,22 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  const mongoose = require('mongoose');
+  const User = require('./models/User');
+  const mongoConnected = mongoose.connection.readyState === 1;
+  let adminExists = false;
+  if (mongoConnected) {
+    adminExists = !!(await User.findOne({ username: 'admin' }));
+  }
   res.json({
-    success: true,
-    message: 'Inventory API is running (MongoDB)',
+    success: mongoConnected,
+    message: mongoConnected
+      ? 'Inventory API is running (MongoDB)'
+      : 'API running but MongoDB NOT connected — set MONGODB_URI',
+    mongoConnected,
+    adminExists,
+    jwtConfigured: !!process.env.JWT_SECRET,
     timestamp: new Date(),
   });
 });
