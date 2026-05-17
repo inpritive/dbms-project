@@ -1,0 +1,8 @@
+[build]
+buildCommand = "npm install --prefix backend"
+
+[deploy]
+startCommand = "npm start --prefix backend"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
