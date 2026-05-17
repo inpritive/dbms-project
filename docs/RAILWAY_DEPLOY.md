@@ -4,7 +4,7 @@
 
 1. Create a new **Railway** project from your GitHub repo.
 2. Add **MySQL** plugin (or use external MySQL).
-3. Set **Root Directory** to empty (repo root) — `railpack.json` handles the backend start.
+3. Set **Root Directory** to empty (repo root) — root `package.json` links the backend via `file:backend`.
 4. Add these **Environment Variables**:
 
 | Variable | Example |
