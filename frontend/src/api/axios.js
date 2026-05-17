@@ -1,13 +1,5 @@
 import axios from 'axios';
-
-// Normalize API URL — must end with /api (e.g. https://your-app.onrender.com/api)
-let API_URL = import.meta.env.VITE_API_URL || '/api';
-if (API_URL !== '/api') {
-  API_URL = API_URL.replace(/\/$/, '');
-  if (!API_URL.endsWith('/api')) {
-    API_URL = `${API_URL}/api`;
-  }
-}
+import { API_URL } from '../utils/apiConfig';
 
 const api = axios.create({
   baseURL: API_URL,
