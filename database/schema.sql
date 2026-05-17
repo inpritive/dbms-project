@@ -175,8 +175,8 @@ INNER JOIN suppliers s ON p.supplier_id = s.supplier_id;
 -- ------------------------------------------------------------
 -- SAMPLE DATA
 -- ------------------------------------------------------------
--- Admin user is created by: cd backend && npm run seed
--- Default credentials: admin / admin123
+-- Admin user auto-created on backend startup (admin / admin123)
+-- Or run: cd backend && npm run seed
 
 INSERT INTO categories (category_name, description) VALUES
 ('Electronics', 'Electronic devices and accessories'),

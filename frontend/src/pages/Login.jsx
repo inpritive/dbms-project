@@ -29,7 +29,13 @@ export default function Login() {
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      if (!err.response) {
+        toast.error(
+          'Cannot reach API server. Start the backend (npm run dev) or set VITE_API_URL on Vercel.'
+        );
+      } else {
+        toast.error(err.response?.data?.message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }

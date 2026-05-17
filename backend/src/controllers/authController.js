@@ -5,7 +5,12 @@ const { logActivity } = require('../middleware/activityLogger');
 
 /** POST /api/auth/login */
 const login = async (req, res) => {
-  const { username, password } = req.body;
+  const username = (req.body.username || '').trim();
+  const password = req.body.password || '';
+
+  // #region agent log
+  fetch('http://127.0.0.1:7626/ingest/5a4d8a78-6288-47ee-a76c-e2b42b361e83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4e2cb1'},body:JSON.stringify({sessionId:'4e2cb1',location:'authController.js:login',message:'Login attempt',data:{usernameLen:username.length,hasPassword:!!password},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
 
   const [users] = await pool.execute(
     `SELECT user_id, username, email, password_hash, full_name, role
@@ -13,12 +18,20 @@ const login = async (req, res) => {
     [username, username]
   );
 
+  // #region agent log
+  fetch('http://127.0.0.1:7626/ingest/5a4d8a78-6288-47ee-a76c-e2b42b361e83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4e2cb1'},body:JSON.stringify({sessionId:'4e2cb1',location:'authController.js:login',message:'User lookup result',data:{userCount:users.length},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+
   if (users.length === 0) {
     return res.status(401).json({ success: false, message: 'Invalid username or password' });
   }
 
   const user = users[0];
   const valid = await bcrypt.compare(password, user.password_hash);
+
+  // #region agent log
+  fetch('http://127.0.0.1:7626/ingest/5a4d8a78-6288-47ee-a76c-e2b42b361e83',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4e2cb1'},body:JSON.stringify({sessionId:'4e2cb1',location:'authController.js:login',message:'Password check',data:{valid},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+  // #endregion
 
   if (!valid) {
     return res.status(401).json({ success: false, message: 'Invalid username or password' });

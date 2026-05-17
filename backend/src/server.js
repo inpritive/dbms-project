@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const { testConnection } = require('./config/db');
 const { errorHandler } = require('./middleware/errorHandler');
+const { ensureAdminUser } = require('./utils/ensureAdmin');
 
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -17,7 +18,22 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      const allowed = [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        process.env.CLIENT_URL,
+      ].filter(Boolean);
+      if (
+        !origin ||
+        allowed.includes(origin) ||
+        origin.endsWith('.vercel.app')
+      ) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
     credentials: true,
   })
 );
@@ -48,7 +64,14 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 async function startServer() {
-  await testConnection();
+  const connected = await testConnection();
+  if (connected) {
+    try {
+      await ensureAdminUser();
+    } catch (err) {
+      console.error('Admin setup warning:', err.message);
+    }
+  }
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📊 API docs: http://localhost:${PORT}/api/health`);
