@@ -24,15 +24,12 @@ app.use(
         'http://127.0.0.1:5173',
         process.env.CLIENT_URL,
       ].filter(Boolean);
-      if (
+      const isAllowed =
         !origin ||
         allowed.includes(origin) ||
-        origin.endsWith('.vercel.app')
-      ) {
-        callback(null, true);
-      } else {
-        callback(null, true);
-      }
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.onrender.com');
+      callback(null, isAllowed);
     },
     credentials: true,
   })

@@ -17,6 +17,16 @@ A full-stack **Inventory Management System** built for a **DBMS mini project**. 
 | ORM       | mysql2 (connection pool)             |
 | Auth      | JWT + bcrypt password hashing        |
 
+## Production Deployment
+
+| Layer    | Platform        |
+|----------|-----------------|
+| Frontend | **Vercel**      |
+| Backend  | **Render**      |
+| Database | **Railway MySQL** |
+
+Full step-by-step guide: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+
 ---
 
 ## Project Structure
