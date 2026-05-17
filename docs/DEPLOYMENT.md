@@ -34,9 +34,11 @@ mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/inventory_db?retryWrites=
 
 ## Step 2: Render Backend
 
+> If build fails with `vite: not found`, Root Directory is wrong or Build Command is `yarn build`. Fix: [RENDER_SETUP.md](RENDER_SETUP.md)
+
 | Setting | Value |
 |---------|--------|
-| Root Directory | `backend` |
+| Root Directory | `backend` ← **required** |
 | Build Command | `npm install` |
 | Start Command | `npm start` |
 
