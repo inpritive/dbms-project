@@ -1,5 +1,8 @@
 -- ============================================================
--- Simple Inventory Management System - MySQL Schema
+-- DEPRECATED: This project now uses MongoDB (see MONGODB.md)
+-- Kept for reference / viva discussion of relational design only
+-- ============================================================
+-- Simple Inventory Management System - MySQL Schema (LEGACY)
 -- DBMS Mini Project
 -- ============================================================
 

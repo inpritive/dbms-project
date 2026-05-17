@@ -1,13 +1,15 @@
-const { pool } = require('../config/db');
+const ActivityLog = require('../models/ActivityLog');
 
-/** Log user activity to activity_logs table */
+/** Log user activity to MongoDB */
 async function logActivity(userId, actionType, entityType, entityId, description) {
   try {
-    await pool.execute(
-      `INSERT INTO activity_logs (user_id, action_type, entity_type, entity_id, description)
-       VALUES (?, ?, ?, ?, ?)`,
-      [userId, actionType, entityType, entityId, description]
-    );
+    await ActivityLog.create({
+      user_id: userId || null,
+      action_type: actionType,
+      entity_type: entityType,
+      entity_id: entityId ? String(entityId) : null,
+      description,
+    });
   } catch (err) {
     console.error('Activity log failed:', err.message);
   }

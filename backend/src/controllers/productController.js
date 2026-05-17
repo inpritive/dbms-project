@@ -1,77 +1,80 @@
-const { pool } = require('../config/db');
+const Product = require('../models/Product');
+const Category = require('../models/Category');
+const Supplier = require('../models/Supplier');
 const { getStockStatus } = require('../utils/stockStatus');
 const { logActivity } = require('../middleware/activityLogger');
+const { formatProduct } = require('../utils/formatDoc');
 
-/** Build WHERE clause for search/filter */
-function buildProductFilters(query) {
-  const conditions = [];
-  const params = [];
+function buildProductFilter(query) {
+  const filter = {};
 
   if (query.search) {
-    conditions.push(`(p.product_name LIKE ? OR c.category_name LIKE ? OR s.supplier_name LIKE ?)`);
-    const term = `%${query.search}%`;
-    params.push(term, term, term);
+    const term = new RegExp(query.search, 'i');
+    filter.$or = [{ product_name: term }];
   }
-  if (query.category_id) {
-    conditions.push('p.category_id = ?');
-    params.push(query.category_id);
-  }
-  if (query.supplier_id) {
-    conditions.push('p.supplier_id = ?');
-    params.push(query.supplier_id);
-  }
-  if (query.stock_status) {
-    conditions.push('p.stock_status = ?');
-    params.push(query.stock_status);
-  }
+  if (query.category_id) filter.category_id = query.category_id;
+  if (query.supplier_id) filter.supplier_id = query.supplier_id;
+  if (query.stock_status) filter.stock_status = query.stock_status;
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  return { where, params };
+  return filter;
 }
+
+const sortFieldMap = {
+  product_id: '_id',
+  product_name: 'product_name',
+  price: 'price',
+  quantity: 'quantity',
+  date_added: 'createdAt',
+  stock_status: 'stock_status',
+};
 
 /** GET /api/products */
 const getProducts = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
-  const offset = (page - 1) * limit;
-  const sortBy = ['product_name', 'price', 'quantity', 'date_added', 'stock_status'].includes(req.query.sortBy)
-    ? req.query.sortBy
-    : 'product_id';
-  const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+  const skip = (page - 1) * limit;
+  const sortBy = sortFieldMap[req.query.sortBy] || '_id';
+  const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
 
-  const { where, params } = buildProductFilters(req.query);
+  let filter = buildProductFilter(req.query);
 
-  const [countResult] = await pool.execute(
-    `SELECT COUNT(*) AS total FROM products p
-     INNER JOIN categories c ON p.category_id = c.category_id
-     INNER JOIN suppliers s ON p.supplier_id = s.supplier_id
-     ${where}`,
-    params
-  );
+  if (req.query.search) {
+    const term = req.query.search;
+    const [cats, sups] = await Promise.all([
+      Category.find({ category_name: new RegExp(term, 'i') }).select('_id'),
+      Supplier.find({ supplier_name: new RegExp(term, 'i') }).select('_id'),
+    ]);
+    filter = {
+      $or: [
+        { product_name: new RegExp(term, 'i') },
+        { category_id: { $in: cats.map((c) => c._id) } },
+        { supplier_id: { $in: sups.map((s) => s._id) } },
+      ],
+      ...(req.query.stock_status && { stock_status: req.query.stock_status }),
+      ...(req.query.category_id && { category_id: req.query.category_id }),
+      ...(req.query.supplier_id && { supplier_id: req.query.supplier_id }),
+    };
+  }
 
-  const [products] = await pool.execute(
-    `SELECT p.product_id, p.product_name, p.category_id, c.category_name,
-            p.supplier_id, s.supplier_name, p.price, p.quantity,
-            p.stock_status, p.image_url, p.date_added,
-            (p.price * p.quantity) AS inventory_value
-     FROM products p
-     INNER JOIN categories c ON p.category_id = c.category_id
-     INNER JOIN suppliers s ON p.supplier_id = s.supplier_id
-     ${where}
-     ORDER BY p.${sortBy} ${sortOrder}
-     LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
-  );
+  const [total, products] = await Promise.all([
+    Product.countDocuments(filter),
+    Product.find(filter)
+      .populate('category_id')
+      .populate('supplier_id')
+      .sort({ [sortBy]: sortOrder })
+      .skip(skip)
+      .limit(limit),
+  ]);
 
   res.json({
     success: true,
     data: {
-      products,
+      products: products.map((p) => formatProduct(p)),
       pagination: {
         page,
         limit,
-        total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     },
   });
@@ -79,94 +82,93 @@ const getProducts = async (req, res) => {
 
 /** GET /api/products/:id */
 const getProductById = async (req, res) => {
-  const [products] = await pool.execute(
-    `SELECT * FROM vw_product_details WHERE product_id = ?`,
-    [req.params.id]
-  );
+  const product = await Product.findById(req.params.id)
+    .populate('category_id')
+    .populate('supplier_id');
 
-  if (products.length === 0) {
+  if (!product) {
     return res.status(404).json({ success: false, message: 'Product not found' });
   }
 
-  res.json({ success: true, data: products[0] });
+  res.json({ success: true, data: formatProduct(product) });
 };
 
 /** POST /api/products */
 const createProduct = async (req, res) => {
   const { product_name, category_id, supplier_id, price, quantity } = req.body;
   const image_url = req.file ? `/uploads/${req.file.filename}` : null;
-  const stock_status = getStockStatus(quantity);
 
-  const [result] = await pool.execute(
-    `INSERT INTO products (product_name, category_id, supplier_id, price, quantity, image_url, stock_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [product_name, category_id, supplier_id, price, quantity, image_url, stock_status]
-  );
+  const product = await Product.create({
+    product_name,
+    category_id,
+    supplier_id,
+    price: Number(price),
+    quantity: Number(quantity),
+    image_url,
+    stock_status: getStockStatus(quantity),
+  });
 
   await logActivity(
     req.user.userId,
     'CREATE',
     'product',
-    result.insertId,
+    product._id.toString(),
     `Added product: ${product_name}`
   );
 
   res.status(201).json({
     success: true,
     message: 'Product created successfully',
-    data: { productId: result.insertId },
+    data: { productId: product._id.toString() },
   });
 };
 
 /** PUT /api/products/:id */
 const updateProduct = async (req, res) => {
-  const { id } = req.params;
   const { product_name, category_id, supplier_id, price, quantity } = req.body;
+  const product = await Product.findById(req.params.id);
 
-  const [existing] = await pool.execute(`SELECT * FROM products WHERE product_id = ?`, [id]);
-  if (existing.length === 0) {
+  if (!product) {
     return res.status(404).json({ success: false, message: 'Product not found' });
   }
 
-  const stock_status = getStockStatus(quantity);
-  let image_url = existing[0].image_url;
+  product.product_name = product_name;
+  product.category_id = category_id;
+  product.supplier_id = supplier_id;
+  product.price = Number(price);
+  product.quantity = Number(quantity);
+  product.stock_status = getStockStatus(quantity);
+  if (req.file) product.image_url = `/uploads/${req.file.filename}`;
 
-  if (req.file) {
-    image_url = `/uploads/${req.file.filename}`;
-  }
+  await product.save();
 
-  await pool.execute(
-    `UPDATE products SET product_name=?, category_id=?, supplier_id=?,
-     price=?, quantity=?, image_url=?, stock_status=? WHERE product_id=?`,
-    [product_name, category_id, supplier_id, price, quantity, image_url, stock_status, id]
+  await logActivity(
+    req.user.userId,
+    'UPDATE',
+    'product',
+    req.params.id,
+    `Updated product: ${product_name}`
   );
-
-  await logActivity(req.user.userId, 'UPDATE', 'product', id, `Updated product: ${product_name}`);
 
   res.json({ success: true, message: 'Product updated successfully' });
 };
 
 /** DELETE /api/products/:id */
 const deleteProduct = async (req, res) => {
-  const { id } = req.params;
-
-  const [existing] = await pool.execute(
-    `SELECT product_name FROM products WHERE product_id = ?`,
-    [id]
-  );
-
-  if (existing.length === 0) {
+  const product = await Product.findById(req.params.id);
+  if (!product) {
     return res.status(404).json({ success: false, message: 'Product not found' });
   }
 
-  await pool.execute(`DELETE FROM products WHERE product_id = ?`, [id]);
+  const name = product.product_name;
+  await product.deleteOne();
 
   await logActivity(
     req.user.userId,
     'DELETE',
     'product',
-    id,
-    `Deleted product: ${existing[0].product_name}`
+    req.params.id,
+    `Deleted product: ${name}`
   );
 
   res.json({ success: true, message: 'Product deleted successfully' });
@@ -175,7 +177,8 @@ const deleteProduct = async (req, res) => {
 /** GET /api/products/export/csv */
 const exportCSV = async (req, res) => {
   const { Parser } = require('json2csv');
-  const [products] = await pool.execute(`SELECT * FROM vw_product_details ORDER BY product_id`);
+  const products = await Product.find().populate('category_id').populate('supplier_id');
+  const rows = products.map((p) => formatProduct(p));
 
   const fields = [
     'product_id', 'product_name', 'category_name', 'supplier_name',
@@ -183,7 +186,7 @@ const exportCSV = async (req, res) => {
   ];
 
   const parser = new Parser({ fields });
-  const csv = parser.parse(products);
+  const csv = parser.parse(rows);
 
   res.header('Content-Type', 'text/csv');
   res.attachment('products-export.csv');
@@ -193,10 +196,8 @@ const exportCSV = async (req, res) => {
 /** GET /api/products/export/pdf */
 const exportPDF = async (req, res) => {
   const PDFDocument = require('pdfkit');
-  const [products] = await pool.execute(
-    `SELECT product_id, product_name, category_name, supplier_name,
-            price, quantity, stock_status FROM vw_product_details ORDER BY product_id`
-  );
+  const products = await Product.find().populate('category_id').populate('supplier_id');
+  const rows = products.map((p) => formatProduct(p));
 
   const doc = new PDFDocument({ margin: 50 });
   res.setHeader('Content-Type', 'application/pdf');
@@ -207,7 +208,7 @@ const exportPDF = async (req, res) => {
   doc.moveDown();
   doc.fontSize(10);
 
-  products.forEach((p, i) => {
+  rows.forEach((p, i) => {
     doc.text(
       `${i + 1}. ${p.product_name} | ${p.category_name} | Qty: ${p.quantity} | $${p.price} | ${p.stock_status}`
     );

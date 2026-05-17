@@ -1,55 +1,73 @@
-const { pool } = require('../config/db');
+const Product = require('../models/Product');
+const Category = require('../models/Category');
+const ActivityLog = require('../models/ActivityLog');
+const { formatActivity } = require('../utils/formatDoc');
 
 /** GET /api/dashboard/stats */
 const getStats = async (req, res) => {
-  const [summary] = await pool.execute(`SELECT * FROM vw_inventory_summary`);
+  const products = await Product.find();
 
-  const [categoryDist] = await pool.execute(`
-    SELECT c.category_name AS name, COUNT(p.product_id) AS value
-    FROM categories c
-    LEFT JOIN products p ON c.category_id = p.category_id
-    GROUP BY c.category_id, c.category_name
-    ORDER BY value DESC
-  `);
+  const totalProducts = products.length;
+  const totalStockQuantity = products.reduce((sum, p) => sum + p.quantity, 0);
+  const totalInventoryValue = products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+  const lowStockCount = products.filter((p) => p.stock_status === 'Low Stock').length;
+  const outOfStockCount = products.filter((p) => p.stock_status === 'Out of Stock').length;
 
-  const [stockDist] = await pool.execute(`
-    SELECT stock_status AS name, COUNT(*) AS value
-    FROM products
-    GROUP BY stock_status
-  `);
+  const categories = await Category.find();
+  const categoryDistribution = await Promise.all(
+    categories.map(async (c) => ({
+      name: c.category_name,
+      value: await Product.countDocuments({ category_id: c._id }),
+    }))
+  );
+  categoryDistribution.sort((a, b) => b.value - a.value);
 
-  const [monthlyTrend] = await pool.execute(`
-    SELECT DATE_FORMAT(date_added, '%Y-%m') AS month,
-           COUNT(*) AS products_added,
-           COALESCE(SUM(price * quantity), 0) AS inventory_value
-    FROM products
-    WHERE date_added >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-    GROUP BY DATE_FORMAT(date_added, '%Y-%m')
-    ORDER BY month ASC
-  `);
+  const stockStatuses = ['In Stock', 'Low Stock', 'Out of Stock'];
+  const stockDistribution = stockStatuses.map((name) => ({
+    name,
+    value: products.filter((p) => p.stock_status === name).length,
+  }));
 
-  const [lowStock] = await pool.execute(`
-    SELECT product_id, product_name, quantity, stock_status, price
-    FROM products
-    WHERE stock_status IN ('Low Stock', 'Out of Stock')
-    ORDER BY quantity ASC
-    LIMIT 10
-  `);
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  const s = summary[0] || {};
+  const recentProducts = await Product.find({ createdAt: { $gte: sixMonthsAgo } });
+  const monthMap = {};
+  recentProducts.forEach((p) => {
+    const month = p.createdAt.toISOString().slice(0, 7);
+    if (!monthMap[month]) monthMap[month] = { products_added: 0, inventory_value: 0 };
+    monthMap[month].products_added += 1;
+    monthMap[month].inventory_value += p.price * p.quantity;
+  });
+  const monthlyTrend = Object.entries(monthMap)
+    .map(([month, data]) => ({ month, ...data }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  const lowStockAlerts = await Product.find({
+    stock_status: { $in: ['Low Stock', 'Out of Stock'] },
+  })
+    .sort({ quantity: 1 })
+    .limit(10)
+    .select('product_name quantity stock_status price');
 
   res.json({
     success: true,
     data: {
-      totalProducts: Number(s.total_products) || 0,
-      totalStockQuantity: Number(s.total_stock_quantity) || 0,
-      totalInventoryValue: Number(s.total_inventory_value) || 0,
-      lowStockCount: Number(s.low_stock_count) || 0,
-      outOfStockCount: Number(s.out_of_stock_count) || 0,
-      categoryDistribution: categoryDist,
-      stockDistribution: stockDist,
+      totalProducts,
+      totalStockQuantity,
+      totalInventoryValue,
+      lowStockCount,
+      outOfStockCount,
+      categoryDistribution,
+      stockDistribution,
       monthlyTrend,
-      lowStockAlerts: lowStock,
+      lowStockAlerts: lowStockAlerts.map((p) => ({
+        product_id: p._id.toString(),
+        product_name: p.product_name,
+        quantity: p.quantity,
+        stock_status: p.stock_status,
+        price: p.price,
+      })),
     },
   });
 };
@@ -58,17 +76,12 @@ const getStats = async (req, res) => {
 const getRecentActivity = async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
 
-  const [logs] = await pool.execute(
-    `SELECT al.log_id, al.action_type, al.entity_type, al.entity_id,
-            al.description, al.created_at, u.username
-     FROM activity_logs al
-     LEFT JOIN users u ON al.user_id = u.user_id
-     ORDER BY al.created_at DESC
-     LIMIT ?`,
-    [limit]
-  );
+  const logs = await ActivityLog.find()
+    .populate('user_id', 'username')
+    .sort({ createdAt: -1 })
+    .limit(limit);
 
-  res.json({ success: true, data: logs });
+  res.json({ success: true, data: logs.map(formatActivity) });
 };
 
 module.exports = { getStats, getRecentActivity };

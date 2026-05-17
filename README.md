@@ -1,6 +1,6 @@
 # InventoryPro — Simple Inventory Management System
 
-A full-stack **Inventory Management System** built for a **DBMS mini project**. Features JWT authentication, MySQL relational database, REST APIs, analytics dashboard with charts, CRUD operations, CSV/PDF export, and a modern React + Tailwind UI with dark mode.
+A full-stack **Inventory Management System** built for a **DBMS mini project**. Features JWT authentication, MongoDB database, REST APIs, analytics dashboard with charts, CRUD operations, CSV/PDF export, and a modern React + Tailwind UI with dark mode.
 
 ![Dashboard Screenshot](docs/screenshots/dashboard.png)
 > Placeholder: Add screenshot after running the app
@@ -13,8 +13,8 @@ A full-stack **Inventory Management System** built for a **DBMS mini project**. 
 |-----------|--------------------------------------|
 | Frontend  | React.js, Vite, Tailwind CSS, Recharts |
 | Backend   | Node.js, Express.js                  |
-| Database  | MySQL                                |
-| ORM       | mysql2 (connection pool)             |
+| Database  | MongoDB                              |
+| ODM       | Mongoose                             |
 | Auth      | JWT + bcrypt password hashing        |
 
 ## Production Deployment
@@ -23,7 +23,7 @@ A full-stack **Inventory Management System** built for a **DBMS mini project**. 
 |----------|-----------------|
 | Frontend | **Vercel**      |
 | Backend  | **Render**      |
-| Database | **Railway MySQL** |
+| Database | **MongoDB Atlas** |
 
 Full step-by-step guide: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
@@ -49,7 +49,7 @@ dbms-project/
 │       ├── context/         # Auth & theme state
 │       └── pages/           # Route pages
 ├── database/
-│   └── schema.sql           # MySQL schema + sample data
+│   └── MONGODB.md           # MongoDB collections guide
 └── docs/                    # ER diagram, viva Q&A
 ```
 
@@ -70,7 +70,7 @@ dbms-project/
 ## Prerequisites
 
 - **Node.js** v18+ ([download](https://nodejs.org))
-- **MySQL** 8.0+ ([download](https://dev.mysql.com/downloads/))
+- **MongoDB** Atlas account or local MongoDB
 - **npm** (comes with Node.js)
 
 ---
@@ -84,15 +84,15 @@ git clone <your-repo-url>
 cd dbms-project
 ```
 
-### 2. Database setup
+### 2. MongoDB setup
 
-Start MySQL, then import the schema:
+Use [MongoDB Atlas](https://www.mongodb.com/atlas) (free) or local MongoDB:
 
-```bash
-mysql -u root -p < database/schema.sql
+```env
+MONGODB_URI=mongodb://localhost:27017/inventory_db
 ```
 
-Or using MySQL Workbench: open `database/schema.sql` and execute.
+See [database/MONGODB.md](database/MONGODB.md) for details.
 
 ### 3. Backend setup
 
@@ -101,13 +101,10 @@ cd backend
 cp .env.example .env
 ```
 
-Edit `.env` with your MySQL credentials:
+Edit `.env`:
 
 ```env
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=inventory_db
+MONGODB_URI=your_mongodb_connection_string
 JWT_SECRET=your_secret_key_here
 ```
 
@@ -287,7 +284,7 @@ cd backend && npm start
 
 | Issue | Solution |
 |-------|----------|
-| MySQL connection refused | Check MySQL is running and `.env` credentials |
+| MongoDB connection failed | Check `MONGODB_URI` in Render/backend `.env` |
 | Login fails | Run `npm run seed` in backend folder |
 | CORS error | Set `CLIENT_URL=http://localhost:5173` in backend `.env` |
 | Port in use | Change `PORT` in backend `.env` or Vite port in `vite.config.js` |

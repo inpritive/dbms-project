@@ -3,16 +3,16 @@
 ## General Project Questions
 
 ### Q1. What is your project about?
-**A:** InventoryPro is a web-based Inventory Management System that helps businesses track products, monitor stock levels, manage categories and suppliers, and view analytics through a dashboard. It uses React for the frontend, Node.js/Express for the backend, and MySQL as the relational database.
+**A:** InventoryPro is a web-based Inventory Management System that helps businesses track products, monitor stock levels, manage categories and suppliers, and view analytics through a dashboard. It uses React for the frontend, Node.js/Express for the backend, and **MongoDB** with Mongoose ODM.
 
-### Q2. Why did you choose MySQL over MongoDB?
-**A:** Inventory data has clear relationships (products belong to categories and suppliers). A relational database enforces referential integrity with foreign keys, supports JOINs for reports, and is ideal for structured inventory data with ACID compliance.
+### Q2. Why did you choose MongoDB?
+**A:** MongoDB stores data as flexible JSON-like documents, integrates easily with Node.js via Mongoose, scales well on cloud (Atlas), and fits our document structure (products with category/supplier references). We use `ObjectId` references between collections, similar to foreign keys in SQL.
 
 ### Q3. What architecture does your project follow?
 **A:** Three-tier architecture:
 1. **Presentation Layer** — React frontend
 2. **Application Layer** — Express REST API (MVC pattern)
-3. **Data Layer** — MySQL database
+3. **Data Layer** — MongoDB database
 
 ---
 
@@ -96,7 +96,7 @@ Example: `GET /api/products` returns all products.
 
 ### Q15. What is the MVC pattern?
 **A:**
-- **Model** — Database layer (mysql2 queries)
+- **Model** — Mongoose schemas and models
 - **View** — React frontend UI
 - **Controller** — `controllers/` folder handles business logic
 - **Routes** — Map URLs to controllers
@@ -119,11 +119,7 @@ Example: `GET /api/products` returns all products.
 ## Security Questions
 
 ### Q19. How do you prevent SQL Injection?
-**A:** We use **parameterized queries** with mysql2 placeholders (`?`) instead of string concatenation:
-
-```javascript
-await pool.execute('SELECT * FROM products WHERE product_id = ?', [id]);
-```
+**A:** Mongoose validates and sanitizes queries. We use `findById`, `findOne` with filters instead of raw string concatenation, which prevents injection attacks.
 
 ### Q20. How are routes protected?
 **A:** The `authenticate` middleware checks the JWT token on every protected API route. Invalid/missing tokens return HTTP 401.

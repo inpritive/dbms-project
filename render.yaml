@@ -1,5 +1,4 @@
-# Render Blueprint — Backend API only
-# Frontend: Vercel | Database: Railway MySQL
+# Render — Backend API | MongoDB Atlas or Railway MongoDB
 services:
   - type: web
     name: dbms-inventory-api
@@ -16,15 +15,7 @@ services:
         value: 24h
       - key: JWT_SECRET
         generateValue: true
+      - key: MONGODB_URI
+        sync: false
       - key: CLIENT_URL
-        sync: false
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        sync: false
-      - key: DB_USER
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: DB_NAME
         sync: false

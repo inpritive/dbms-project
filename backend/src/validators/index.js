@@ -1,4 +1,4 @@
-const { body, param, query } = require('express-validator');
+const { body, param } = require('express-validator');
 
 const handleValidation = (req, res, next) => {
   const { validationResult } = require('express-validator');
@@ -17,8 +17,8 @@ const loginValidation = [
 
 const productValidation = [
   body('product_name').trim().notEmpty().isLength({ max: 200 }),
-  body('category_id').isInt({ min: 1 }),
-  body('supplier_id').isInt({ min: 1 }),
+  body('category_id').notEmpty().withMessage('Category is required'),
+  body('supplier_id').notEmpty().withMessage('Supplier is required'),
   body('price').isFloat({ min: 0 }),
   body('quantity').isInt({ min: 0 }),
   handleValidation,
@@ -31,11 +31,11 @@ const categoryValidation = [
 
 const supplierValidation = [
   body('supplier_name').trim().notEmpty().isLength({ max: 150 }),
-  body('contact_email').optional().isEmail(),
+  body('contact_email').optional({ checkFalsy: true }).isEmail(),
   handleValidation,
 ];
 
-const idParam = [param('id').isInt({ min: 1 }), handleValidation];
+const idParam = [param('id').isMongoId().withMessage('Invalid ID'), handleValidation];
 
 module.exports = {
   loginValidation,

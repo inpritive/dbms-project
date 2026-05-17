@@ -1,111 +1,101 @@
-const { pool } = require('../config/db');
+const Supplier = require('../models/Supplier');
+const Product = require('../models/Product');
 const { logActivity } = require('../middleware/activityLogger');
+const { formatSupplier } = require('../utils/formatDoc');
 
 /** GET /api/suppliers */
 const getSuppliers = async (req, res) => {
-  const search = req.query.search ? `%${req.query.search}%` : null;
-
-  let query = `
-    SELECT s.*, COUNT(p.product_id) AS product_count
-    FROM suppliers s
-    LEFT JOIN products p ON s.supplier_id = p.supplier_id
-  `;
-  const params = [];
-
-  if (search) {
-    query += ` WHERE s.supplier_name LIKE ? OR s.contact_email LIKE ?`;
-    params.push(search, search);
+  const filter = {};
+  if (req.query.search) {
+    const term = new RegExp(req.query.search, 'i');
+    filter.$or = [{ supplier_name: term }, { contact_email: term }];
   }
 
-  query += ` GROUP BY s.supplier_id ORDER BY s.supplier_name ASC`;
+  const suppliers = await Supplier.find(filter).sort({ supplier_name: 1 });
+  const result = await Promise.all(
+    suppliers.map(async (sup) => {
+      const count = await Product.countDocuments({ supplier_id: sup._id });
+      return formatSupplier(sup, count);
+    })
+  );
 
-  const [suppliers] = await pool.execute(query, params);
-  res.json({ success: true, data: suppliers });
+  res.json({ success: true, data: result });
 };
 
 /** GET /api/suppliers/:id */
 const getSupplierById = async (req, res) => {
-  const [suppliers] = await pool.execute(
-    `SELECT * FROM suppliers WHERE supplier_id = ?`,
-    [req.params.id]
-  );
-
-  if (suppliers.length === 0) {
+  const supplier = await Supplier.findById(req.params.id);
+  if (!supplier) {
     return res.status(404).json({ success: false, message: 'Supplier not found' });
   }
-
-  res.json({ success: true, data: suppliers[0] });
+  res.json({ success: true, data: formatSupplier(supplier) });
 };
 
 /** POST /api/suppliers */
 const createSupplier = async (req, res) => {
   const { supplier_name, contact_email, contact_phone, address } = req.body;
-
-  const [result] = await pool.execute(
-    `INSERT INTO suppliers (supplier_name, contact_email, contact_phone, address)
-     VALUES (?, ?, ?, ?)`,
-    [supplier_name, contact_email, contact_phone, address]
-  );
+  const supplier = await Supplier.create({
+    supplier_name,
+    contact_email,
+    contact_phone,
+    address,
+  });
 
   await logActivity(
     req.user.userId,
     'CREATE',
     'supplier',
-    result.insertId,
+    supplier._id.toString(),
     `Created supplier: ${supplier_name}`
   );
 
   res.status(201).json({
     success: true,
     message: 'Supplier created successfully',
-    data: { supplierId: result.insertId },
+    data: { supplierId: supplier._id.toString() },
   });
 };
 
 /** PUT /api/suppliers/:id */
 const updateSupplier = async (req, res) => {
   const { supplier_name, contact_email, contact_phone, address } = req.body;
-
-  const [result] = await pool.execute(
-    `UPDATE suppliers SET supplier_name=?, contact_email=?, contact_phone=?, address=?
-     WHERE supplier_id = ?`,
-    [supplier_name, contact_email, contact_phone, address, req.params.id]
+  const supplier = await Supplier.findByIdAndUpdate(
+    req.params.id,
+    { supplier_name, contact_email, contact_phone, address },
+    { new: true, runValidators: true }
   );
 
-  if (result.affectedRows === 0) {
+  if (!supplier) {
     return res.status(404).json({ success: false, message: 'Supplier not found' });
   }
 
-  await logActivity(req.user.userId, 'UPDATE', 'supplier', req.params.id, `Updated supplier: ${supplier_name}`);
+  await logActivity(
+    req.user.userId,
+    'UPDATE',
+    'supplier',
+    req.params.id,
+    `Updated supplier: ${supplier_name}`
+  );
 
   res.json({ success: true, message: 'Supplier updated successfully' });
 };
 
 /** DELETE /api/suppliers/:id */
 const deleteSupplier = async (req, res) => {
-  const [products] = await pool.execute(
-    `SELECT COUNT(*) AS count FROM products WHERE supplier_id = ?`,
-    [req.params.id]
-  );
-
-  if (products[0].count > 0) {
+  const count = await Product.countDocuments({ supplier_id: req.params.id });
+  if (count > 0) {
     return res.status(400).json({
       success: false,
       message: 'Cannot delete supplier with associated products',
     });
   }
 
-  const [result] = await pool.execute(
-    `DELETE FROM suppliers WHERE supplier_id = ?`,
-    [req.params.id]
-  );
-
-  if (result.affectedRows === 0) {
+  const supplier = await Supplier.findByIdAndDelete(req.params.id);
+  if (!supplier) {
     return res.status(404).json({ success: false, message: 'Supplier not found' });
   }
 
   await logActivity(req.user.userId, 'DELETE', 'supplier', req.params.id, 'Deleted a supplier');
-
   res.json({ success: true, message: 'Supplier deleted successfully' });
 };
 

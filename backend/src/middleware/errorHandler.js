@@ -2,17 +2,27 @@
 const errorHandler = (err, req, res, next) => {
   console.error(err.stack || err.message);
 
-  if (err.code === 'ER_DUP_ENTRY') {
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyPattern || {})[0] || 'field';
     return res.status(409).json({
       success: false,
-      message: 'Duplicate entry. Record already exists.',
+      message: `Duplicate ${field}. Record already exists.`,
     });
   }
 
-  if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+  if (err.name === 'CastError') {
     return res.status(400).json({
       success: false,
-      message: 'Invalid reference. Related record does not exist.',
+      message: 'Invalid ID format',
+    });
+  }
+
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      message: Object.values(err.errors)
+        .map((e) => e.message)
+        .join(', '),
     });
   }
 
@@ -24,7 +34,6 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-/** Async handler wrapper to catch promise rejections */
 const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };

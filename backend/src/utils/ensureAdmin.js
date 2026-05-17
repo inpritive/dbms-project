@@ -1,28 +1,29 @@
 const bcrypt = require('bcryptjs');
-const { pool } = require('../config/db');
+const User = require('../models/User');
 
 /** Create or repair admin user on server startup */
 async function ensureAdminUser() {
   const password = 'admin123';
   const hash = await bcrypt.hash(password, 10);
 
-  const [rows] = await pool.execute(
-    `SELECT user_id, password_hash FROM users WHERE username = 'admin'`
-  );
+  let user = await User.findOne({ username: 'admin' });
 
-  if (rows.length === 0) {
-    await pool.execute(
-      `INSERT INTO users (username, email, password_hash, full_name, role)
-       VALUES ('admin', 'admin@inventory.com', ?, 'System Administrator', 'admin')`,
-      [hash]
-    );
+  if (!user) {
+    user = await User.create({
+      username: 'admin',
+      email: 'admin@inventory.com',
+      password_hash: hash,
+      full_name: 'System Administrator',
+      role: 'admin',
+    });
     console.log('✓ Admin user created — username: admin, password: admin123');
     return { action: 'created' };
   }
 
-  const valid = await bcrypt.compare(password, rows[0].password_hash);
+  const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) {
-    await pool.execute(`UPDATE users SET password_hash = ? WHERE username = 'admin'`, [hash]);
+    user.password_hash = hash;
+    await user.save();
     console.log('✓ Admin password reset — username: admin, password: admin123');
     return { action: 'reset' };
   }
