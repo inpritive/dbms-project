@@ -56,17 +56,22 @@ Test: `https://YOUR-RENDER-URL.onrender.com/api/health`
 
 ## Step 3: Vercel Frontend
 
-**Important:** In Vercel → Project Settings → General → **Root Directory** set to:
+**Vercel settings** (use **either** option):
 
-```
-frontend
-```
+**Option A — Root Directory empty (recommended, uses root `vercel.json`)**
+
+| Setting | Value |
+|---------|--------|
+| Root Directory | *(leave empty)* |
+| Framework Preset | Vite |
+| Build / Install | *(leave empty — auto from `vercel.json`)* |
+
+**Option B — Root Directory = `frontend`**
 
 | Setting | Value |
 |---------|--------|
 | Root Directory | `frontend` |
 | Framework Preset | Vite |
-| Build Command | (leave empty — uses `frontend/vercel.json`) |
 | Output Directory | `dist` |
 
 **Environment variable:**
